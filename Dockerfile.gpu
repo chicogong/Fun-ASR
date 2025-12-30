@@ -1,0 +1,17 @@
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+# 安装依赖
+RUN pip install --no-cache-dir funasr transformers>=4.51.0 fastapi uvicorn python-multipart
+
+# 复制代码
+COPY model.py run.py server.py ./
+
+ENV PYTHONUNBUFFERED=1
+ENV MODEL_DIR=/model
+
+EXPOSE 8000
+
+# 启动 API 服务
+CMD ["python", "server.py"]
