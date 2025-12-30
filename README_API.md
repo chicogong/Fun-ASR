@@ -77,7 +77,7 @@ curl http://localhost:8000/info
         }
     },
     "default_model": "nano",
-    "max_batch_size": 32,
+    "max_batch_size": 20,
     "device": "cuda:0",
     "gpu_name": "Tesla T4",
     "gpu_memory_total_gb": 14.6,
@@ -163,7 +163,7 @@ curl -X POST http://localhost:8000/transcribe_batch \
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| files | File[] | 是 | - | 多个音频文件 (最多32个) |
+| files | File[] | 是 | - | 多个音频文件 (最多20个) |
 | model | string | 否 | nano | 模型选择 |
 | language | string | 否 | auto | 语言代码 |
 | hotwords | string | 否 | "" | 热词 |
@@ -340,10 +340,12 @@ curl -X POST http://localhost:8000/transcribe \
 
 ### 吞吐量 (Tesla T4 15GB)
 
-| 模式 | 吞吐量 | 延迟 |
-|------|--------|------|
-| 单文件 | ~1 file/s | ~1s |
-| Batch=32 | ~8 files/s | ~4s (总) |
+| 模式 | 吞吐量 | 延迟 | 实时率 |
+|------|--------|------|--------|
+| 单文件 | ~1.3 files/s | ~0.8s | 8.9x |
+| Batch=20 | ~10 files/s | ~2s | 61x |
+
+> 最优 batch size 为 20，吞吐量约 10 files/s
 
 ### 显存占用
 
@@ -351,7 +353,17 @@ curl -X POST http://localhost:8000/transcribe \
 |------|------|
 | Nano 单模型 | ~3.4GB |
 | MLT 单模型 | ~3.4GB |
-| 双模型 | ~6.6GB |
+| 双模型 | ~4.2GB |
+
+### 性能测试
+
+```bash
+# 运行性能对比测试
+python tests/test_performance.py --audio-dir /path/to/audio
+
+# 查找最优 batch size
+python tests/test_performance.py --find-optimal
+```
 
 ---
 
@@ -364,4 +376,4 @@ curl -X POST http://localhost:8000/transcribe \
 | LOAD_NANO | true | 是否加载 Nano |
 | LOAD_MLT | true | 是否加载 MLT |
 | DEFAULT_MODEL | nano | 默认模型 |
-| MAX_BATCH_SIZE | 32 | 最大批处理数 |
+| MAX_BATCH_SIZE | 20 | 最大批处理数 |

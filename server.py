@@ -13,8 +13,8 @@ import asyncio
 # 全局模型
 models = {}
 
-# 最优 batch size (根据 Tesla T4 15GB 测试结果)
-MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "32"))
+# 最优 batch size (根据 Tesla T4 15GB 测试结果, batch=20 吞吐最高 ~10 files/s)
+MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "20"))
 
 # 模型配置 (路径在运行时从环境变量读取)
 MODEL_CONFIGS = {
