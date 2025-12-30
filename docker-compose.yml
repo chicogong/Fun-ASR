@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  funasr:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: funasr-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载本地模型目录 (可选，不挂载则自动下载)
+      # - /path/to/models:/models:ro
+      - funasr-cache:/root/.cache
+    environment:
+      # 模型路径 (使用 HuggingFace ID 会自动下载)
+      - MODEL_NANO_PATH=FunAudioLLM/Fun-ASR-Nano-2512
+      - MODEL_MLT_PATH=FunAudioLLM/Fun-ASR-MLT-Nano-2512
+      # 加载哪些模型 (根据显存选择)
+      - LOAD_NANO=true
+      - LOAD_MLT=false  # 双模型需要 8GB+ 显存
+      # 性能配置
+      - MAX_BATCH_SIZE=32
+      - DEFAULT_MODEL=nano
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s  # 模型加载需要时间
+
+volumes:
+  funasr-cache:
+    driver: local
