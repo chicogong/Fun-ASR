@@ -61,10 +61,14 @@ async def transcribe(
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
+    # 检查文件
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+    
     # 保存临时文件
-    suffix = os.path.splitext(file.filename)[1] or ".wav"
+    suffix = os.path.splitext(file.filename or "audio")[1] or ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
     
@@ -85,8 +89,12 @@ async def transcribe(
         
         return {"text": result[0]["text"]}
     
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to process audio: {str(e)}")
+    
     finally:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 @app.get("/health")
