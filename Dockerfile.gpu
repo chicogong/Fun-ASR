@@ -6,7 +6,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir funasr transformers>=4.51.0 fastapi uvicorn python-multipart
 
 # 复制代码
-COPY model.py run.py server.py ./
+COPY model.py model_batch.py run.py server.py ./
 
 ENV PYTHONUNBUFFERED=1
 ENV MODEL_DIR=/model

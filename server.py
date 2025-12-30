@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     """启动时加载模型"""
     global model
     
-    model_dir = os.environ.get("MODEL_DIR", "FunAudioLLM/Fun-ASR-Nano-2512")
+    model_dir = os.environ.get("MODEL_PATH", os.environ.get("MODEL_DIR", "FunAudioLLM/Fun-ASR-Nano-2512"))
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     
     # 使用支持 batch 的 model_batch.py
