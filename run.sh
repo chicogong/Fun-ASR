@@ -29,8 +29,21 @@ case "$MODE" in
 
       # 检查ffmpeg
       if ! command -v ffmpeg &> /dev/null; then
-        echo "📦 安装 ffmpeg..."
-        conda install -c conda-forge ffmpeg -y
+        echo "⚠️  ffmpeg未安装，尝试自动安装..."
+        if conda install -c conda-forge ffmpeg -y 2>/dev/null; then
+          echo "✅ ffmpeg安装成功"
+        else
+          echo "❌ ffmpeg自动安装失败（镜像源问题）"
+          echo "请手动安装："
+          echo "  conda install ffmpeg"
+          echo "  或使用pip: pip install ffmpeg-python"
+          echo "  或系统包管理: yum install ffmpeg-devel"
+          echo ""
+          echo "按Enter继续（ffmpeg为可选依赖）..."
+          read -t 5 || true
+        fi
+      else
+        echo "✅ ffmpeg已安装"
       fi
     else
       # venv环境
