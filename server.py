@@ -14,7 +14,7 @@ from funasr import AutoModel
 
 # 配置
 MODEL_PATH = os.environ.get("MODEL_PATH", "FunAudioLLM/Fun-ASR-MLT-Nano-2512")
-MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "20"))
+MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "50"))  # 增加到50以提升吞吐量
 
 # 全局模型
 model = None

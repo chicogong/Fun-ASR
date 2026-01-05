@@ -106,10 +106,12 @@ print(response.json())
 
 ## 环境变量
 
-- `USE_GPU=false` - 使用CPU模式（默认）
-- `USE_GPU=true` - 使用GPU模式（需要兼容环境）
+- `USE_GPU=true` - 使用GPU模式（**默认，推荐，性能提升5倍**）
+- `USE_GPU=false` - 使用CPU模式
 - `MODEL_PATH` - 模型路径（默认：FunAudioLLM/Fun-ASR-MLT-Nano-2512）
 - `MAX_BATCH_SIZE` - 最大批处理大小（默认：20）
+
+**性能对比**: GPU 模式 RTF ≈ 0.06，CPU 模式 RTF ≈ 0.31（GPU 快 5 倍）
 
 ## 常用命令
 

@@ -38,3 +38,4 @@ data/
 build/
 dist/
 *.egg-info/
+venv311/

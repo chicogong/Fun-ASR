@@ -12,7 +12,7 @@ IMAGE_NAME="funasr-mlt-batch"
 REMOTE_IMAGE="ccr.ccs.tencentyun.com/chico/funasr-mlt-batch:latest"
 CONTAINER_NAME="funasr"
 PORT=8000
-USE_GPU=${USE_GPU:-false}  # 默认CPU模式（GPU模式需要兼容的环境）
+USE_GPU=${USE_GPU:-true}  # 默认GPU模式（如需CPU模式，设置 USE_GPU=false）
 USE_REMOTE=${USE_REMOTE:-true}  # 默认使用远程镜像
 
 # 检查Docker
@@ -74,11 +74,11 @@ DOCKER_CMD="docker run -d --name $CONTAINER_NAME"
 
 # GPU选项
 if [ "$USE_GPU" = "true" ]; then
-    echo "🎮 启用GPU模式（可能需要兼容的CUDA环境）"
+    echo "🎮 启用GPU模式（推荐，性能提升5倍）"
     DOCKER_CMD="$DOCKER_CMD --gpus all"
     GPU_ENV="-e USE_GPU=true"
 else
-    echo "💻 使用CPU模式（稳定，推荐）"
+    echo "💻 使用CPU模式"
     GPU_ENV="-e USE_GPU=false"
 fi
 
@@ -88,7 +88,7 @@ DOCKER_CMD="$DOCKER_CMD -p $PORT:8000"
 # 环境变量
 DOCKER_CMD="$DOCKER_CMD $GPU_ENV"
 DOCKER_CMD="$DOCKER_CMD -e MODEL_PATH=FunAudioLLM/Fun-ASR-MLT-Nano-2512"
-DOCKER_CMD="$DOCKER_CMD -e MAX_BATCH_SIZE=20"
+DOCKER_CMD="$DOCKER_CMD -e MAX_BATCH_SIZE=50"
 
 # 挂载模型缓存（加速启动）
 DOCKER_CMD="$DOCKER_CMD -v ~/.cache/modelscope:/root/.cache/modelscope"
