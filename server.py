@@ -25,9 +25,8 @@ async def lifespan(app: FastAPI):
     """应用生命周期：加载模型"""
     global model
 
-    # 使用CPU以避免GPU兼容性问题（exit 139 segfault）
-    # 如需GPU，设置环境变量 USE_GPU=true
-    use_gpu = os.environ.get("USE_GPU", "false").lower() == "true"
+    # 默认使用GPU，如需CPU模式设置环境变量 USE_GPU=false
+    use_gpu = os.environ.get("USE_GPU", "true").lower() == "true"
     device = "cuda:0" if (torch.cuda.is_available() and use_gpu) else "cpu"
     print(f"🔧 Device: {device}")
     print(f"📦 Loading MLT model from {MODEL_PATH}...")

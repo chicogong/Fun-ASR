@@ -13,9 +13,9 @@ case "$MODE" in
   local)
     echo "📍 模式: 本地运行"
 
-    # 检测Python
+    # 检测Python（优先3.11以获得最佳兼容性）
     PYTHON_CMD="python"
-    for cmd in python3.10 python3.9 python3.8 python3; do
+    for cmd in python3.11 python3.10 python3.9 python3.8 python3; do
       if command -v $cmd &> /dev/null; then
         PYTHON_CMD=$cmd
         break
@@ -24,15 +24,30 @@ case "$MODE" in
 
     echo "✅ Python: $($PYTHON_CMD --version)"
 
-    # 强制使用venv
-    if [ "$USE_VENV" = "venv" ]; then
-      echo "🔧 强制使用venv模式"
-      if [ ! -d "venv" ]; then
+    # 强制使用venv或自动检测
+    if [ "$USE_VENV" = "venv" ] || [ -z "$CONDA_DEFAULT_ENV" ]; then
+      echo "🔧 使用venv模式"
+      # 优先使用venv311（Python 3.11）
+      if [ -d "venv311" ]; then
+        source venv311/bin/activate
+        echo "✅ 虚拟环境: venv311 (Python 3.11)"
+      elif [ -d "venv" ]; then
+        source venv/bin/activate
+        echo "✅ 虚拟环境: $VIRTUAL_ENV"
+      else
         echo "📦 创建虚拟环境..."
-        $PYTHON_CMD -m venv venv
+        VENV_NAME="venv311"
+        if [[ "$PYTHON_CMD" == *"3.11"* ]]; then
+          VENV_NAME="venv311"
+        else
+          VENV_NAME="venv"
+        fi
+        $PYTHON_CMD -m venv $VENV_NAME
+        source $VENV_NAME/bin/activate
+        echo "📥 安装依赖..."
+        pip install --upgrade pip
+        pip install -r requirements.txt
       fi
-      source venv/bin/activate
-      echo "✅ 虚拟环境: $VIRTUAL_ENV"
     # Conda环境（自动模式）
     elif [ ! -z "$CONDA_DEFAULT_ENV" ]; then
       echo "✅ Conda环境: $CONDA_DEFAULT_ENV"

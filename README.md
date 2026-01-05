@@ -64,13 +64,14 @@ curl http://localhost:8000/health
 |------|------|--------|
 | `MODEL_PATH` | 模型路径 | `FunAudioLLM/Fun-ASR-MLT-Nano-2512` |
 | `MAX_BATCH_SIZE` | 最大batch大小 | `20` |
-| `USE_GPU` | 是否使用GPU (需要CUDA兼容) | `false` |
+| `USE_GPU` | 是否使用GPU | `true` (默认GPU，设置false使用CPU) |
 
 ## 系统要求
 
-- Python 3.8+
+- **Python 3.11+** (推荐，MLT模型最佳兼容性)
+- Python 3.8+ (也支持，但可能需要额外配置)
 - 8GB+ RAM
-- GPU推荐（支持CPU）
+- **GPU推荐** (默认启用CUDA，支持CPU模式)
 
 ## 性能
 

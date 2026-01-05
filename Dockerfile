@@ -12,7 +12,7 @@ EXPOSE 8000
 # 环境变量
 ENV MODEL_PATH="FunAudioLLM/Fun-ASR-MLT-Nano-2512" \
     MAX_BATCH_SIZE="20" \
-    USE_GPU="false" \
+    USE_GPU="true" \
     PYTHONUNBUFFERED=1
 
 # 健康检查
