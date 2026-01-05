@@ -8,7 +8,7 @@ import struct
 import tempfile
 import os
 
-REMOTE_URL = "http://asr-l20.trtc-ai.woa.com:8000"
+REMOTE_URL = os.environ.get("REMOTE_URL", "http://localhost:8000")
 LOCAL_URL = "http://localhost:8000"
 
 def generate_wav(filepath, duration_sec=10, sample_rate=16000):
