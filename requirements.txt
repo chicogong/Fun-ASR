@@ -7,8 +7,9 @@ torchaudio>=2.0.0
 transformers>=4.30.0
 git+https://github.com/modelscope/FunASR
 
-# Web服务
-fastapi>=0.100.0
+# Web服务 (使用兼容的pydantic版本)
+pydantic>=1.10.0,<2.0.0
+fastapi>=0.95.0,<0.100.0
 uvicorn[standard]>=0.23.0
 python-multipart>=0.0.6
 
@@ -19,4 +20,3 @@ librosa>=0.10.0
 # 其他工具
 numpy>=1.24.0
 requests>=2.31.0
-pydantic>=2.0.0
