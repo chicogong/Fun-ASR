@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  funasr:
+    build: .
+    image: funasr-mlt-batch:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=FunAudioLLM/Fun-ASR-MLT-Nano-2512
+      - MAX_BATCH_SIZE=20
+    volumes:
+      # 可选：挂载模型缓存目录加速启动
+      - ~/.cache/modelscope:/root/.cache/modelscope
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
