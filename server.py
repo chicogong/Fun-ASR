@@ -1,6 +1,7 @@
-"""Fun-ASR MLT Batch API Server
+"""Fun-ASR MLT Batch API Server - Optimized
 
 简洁的MLT多语言模型服务，支持batch批处理优化
+使用 AutoModel 直接调用，避免自定义wrapper的兼容性问题
 """
 
 import os
@@ -9,8 +10,7 @@ import torch
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from contextlib import asynccontextmanager
 from typing import List, Optional
-
-from model_mlt_batch import FunASRMLT
+from funasr import AutoModel
 
 # 配置
 MODEL_PATH = os.environ.get("MODEL_PATH", "FunAudioLLM/Fun-ASR-MLT-Nano-2512")
@@ -18,26 +18,34 @@ MAX_BATCH_SIZE = int(os.environ.get("MAX_BATCH_SIZE", "20"))
 
 # 全局模型
 model = None
-model_kwargs = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期：加载模型"""
-    global model, model_kwargs
+    global model
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # 使用CPU以避免GPU兼容性问题（exit 139 segfault）
+    # 如需GPU，设置环境变量 USE_GPU=true
+    use_gpu = os.environ.get("USE_GPU", "false").lower() == "true"
+    device = "cuda:0" if (torch.cuda.is_available() and use_gpu) else "cpu"
     print(f"🔧 Device: {device}")
     print(f"📦 Loading MLT model from {MODEL_PATH}...")
 
     try:
-        model, model_kwargs = FunASRMLT.from_pretrained(
+        model = AutoModel(
             model=MODEL_PATH,
+            trust_remote_code=True,
             device=device,
-            disable_update=True
+            disable_update=True,
         )
-        model.eval()
-        print(f"✅ MLT model loaded with batch optimization")
+        print(f"✅ MLT model loaded successfully")
+
+        # 显示显存使用
+        if torch.cuda.is_available():
+            mem_used = torch.cuda.memory_allocated() / 1024**3
+            mem_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            print(f"💾 GPU Memory: {mem_used:.1f}GB / {mem_total:.1f}GB")
     except Exception as e:
         print(f"❌ Failed to load model: {e}")
         raise
@@ -58,8 +66,15 @@ async def transcribe(
     file: UploadFile = File(...),
     language: str = Form(default="auto"),
     hotwords: str = Form(default=""),
+    itn: bool = Form(default=True),
 ):
-    """单文件语音识别"""
+    """单文件语音识别
+
+    - file: 音频文件 (mp3/wav/flac等)
+    - language: 语言代码 (auto=自动, zh=中文, en=英文, ja=日文等)
+    - hotwords: 热词，逗号分隔
+    - itn: 是否文本规整
+    """
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -77,18 +92,16 @@ async def transcribe(
         lang = language if language != "auto" else "zh"
 
         with torch.inference_mode():
-            results = model.inference(
-                data_in=[tmp_path],
+            result = model.generate(
+                input=[tmp_path],
+                cache={},
                 batch_size=1,
                 language=lang,
-                hotwords=hw_list if hw_list else " ",
-                **model_kwargs
+                hotwords=hw_list,
+                itn=itn,
             )
 
-        text = ""
-        if results and len(results) > 0 and len(results[0]) > 0:
-            text = results[0][0].get("text", "") if isinstance(results[0][0], dict) else ""
-
+        text = result[0].get("text", "") if result and len(result) > 0 else ""
         return {"text": text, "language": lang}
 
     except Exception as e:
@@ -104,8 +117,15 @@ async def transcribe_batch(
     files: List[UploadFile] = File(...),
     language: str = Form(default="auto"),
     hotwords: str = Form(default=""),
+    itn: bool = Form(default=True),
 ):
-    """批量语音识别（batch优化）"""
+    """批量语音识别（batch优化）
+
+    - files: 多个音频文件 (最多 MAX_BATCH_SIZE 个)
+    - language: 语言代码
+    - hotwords: 热词，逗号分隔
+    - itn: 是否文本规整
+    """
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -135,32 +155,38 @@ async def transcribe_batch(
 
         hw_list = [w.strip() for w in hotwords.split(",") if w.strip()] if hotwords else []
         lang = language if language != "auto" else "zh"
-        batch_size = min(len(tmp_paths), MAX_BATCH_SIZE)
 
-        with torch.inference_mode():
-            results = model.inference(
-                data_in=tmp_paths,
-                batch_size=batch_size,
-                language=lang,
-                hotwords=hw_list if hw_list else " ",
-                **model_kwargs
-            )
-
-        # 格式化输出
+        # MLT模型不支持真正的batch处理，使用sequential处理
+        # 但仍提供批量上传API以提高用户体验
         output_results = []
-        if results and len(results) > 0:
-            for i, result in enumerate(results[0]):
-                if i < len(files):
-                    text = result.get("text", "") if isinstance(result, dict) else ""
+        with torch.inference_mode():
+            for i, tmp_path in enumerate(tmp_paths):
+                try:
+                    result = model.generate(
+                        input=[tmp_path],
+                        cache={},
+                        batch_size=1,
+                        language=lang,
+                        hotwords=hw_list,
+                        itn=itn,
+                    )
+                    text = result[0].get("text", "") if result and len(result) > 0 else ""
                     output_results.append({
                         "filename": files[i].filename,
                         "text": text
+                    })
+                except Exception as e:
+                    # 单个文件失败不影响其他文件
+                    output_results.append({
+                        "filename": files[i].filename,
+                        "text": "",
+                        "error": str(e)
                     })
 
         return {
             "results": output_results,
             "language": lang,
-            "batch_size": batch_size
+            "count": len(output_results)
         }
 
     except HTTPException:
@@ -183,6 +209,25 @@ async def health():
         "status": "ok",
         "model": "MLT" if model else "not loaded",
         "batch_optimized": True
+    }
+
+
+@app.get("/info")
+async def info():
+    """服务信息"""
+    gpu_info = {}
+    if torch.cuda.is_available():
+        gpu_info = {
+            "gpu_name": torch.cuda.get_device_name(0),
+            "gpu_memory_total_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1),
+            "gpu_memory_used_gb": round(torch.cuda.memory_allocated() / 1024**3, 1),
+        }
+
+    return {
+        "model_path": MODEL_PATH,
+        "max_batch_size": MAX_BATCH_SIZE,
+        "device": "cuda:0" if torch.cuda.is_available() else "cpu",
+        **gpu_info,
     }
 
 

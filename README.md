@@ -64,6 +64,7 @@ curl http://localhost:8000/health
 |------|------|--------|
 | `MODEL_PATH` | 模型路径 | `FunAudioLLM/Fun-ASR-MLT-Nano-2512` |
 | `MAX_BATCH_SIZE` | 最大batch大小 | `20` |
+| `USE_GPU` | 是否使用GPU (需要CUDA兼容) | `false` |
 
 ## 系统要求
 
@@ -80,8 +81,7 @@ curl http://localhost:8000/health
 
 ```
 Fun-ASR/
-├── server.py              # MLT batch服务器
-├── model_mlt_batch.py     # MLT batch优化模型
+├── server.py              # MLT batch服务器（使用AutoModel，无需自定义wrapper）
 ├── Dockerfile             # Docker镜像
 ├── docker-compose.yml     # Docker Compose配置
 ├── run.sh                 # 统一启动脚本
