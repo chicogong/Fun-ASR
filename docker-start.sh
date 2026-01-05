@@ -9,9 +9,11 @@ echo "=========================================="
 
 # 配置
 IMAGE_NAME="funasr-mlt-batch"
+REMOTE_IMAGE="ccr.ccs.tencentyun.com/chico/funasr-mlt-batch:latest"
 CONTAINER_NAME="funasr"
 PORT=8000
 USE_GPU=${USE_GPU:-false}  # 默认CPU模式（GPU模式需要兼容的环境）
+USE_REMOTE=${USE_REMOTE:-true}  # 默认使用远程镜像
 
 # 检查Docker
 if ! command -v docker &> /dev/null; then
@@ -28,17 +30,43 @@ if docker ps -a | grep -q $CONTAINER_NAME; then
     docker rm $CONTAINER_NAME 2>/dev/null || true
 fi
 
-# 检查镜像是否存在
-if ! docker images | grep -q "^$IMAGE_NAME"; then
-    echo "📦 镜像不存在，开始构建..."
-    if [ ! -f "Dockerfile" ]; then
-        echo "❌ 找不到Dockerfile，请确保在项目根目录运行此脚本"
-        exit 1
+# 确定使用的镜像
+if [ "$USE_REMOTE" = "true" ]; then
+    echo "🌐 使用远程镜像: $REMOTE_IMAGE"
+    FINAL_IMAGE=$REMOTE_IMAGE
+
+    # 拉取远程镜像
+    echo "📥 拉取镜像..."
+    if docker pull $REMOTE_IMAGE; then
+        echo "✅ 镜像拉取成功"
+    else
+        echo "❌ 镜像拉取失败，尝试使用本地构建"
+        USE_REMOTE=false
     fi
-    docker build -t $IMAGE_NAME:latest .
-    echo "✅ 镜像构建完成"
-else
-    echo "✅ 镜像已存在: $IMAGE_NAME"
+fi
+
+if [ "$USE_REMOTE" = "false" ]; then
+    echo "🏗️  使用本地构建"
+    FINAL_IMAGE="$IMAGE_NAME:latest"
+
+    # 检查镜像是否存在
+    if ! docker images | grep -q "^$IMAGE_NAME"; then
+        echo "📦 镜像不存在，开始构建..."
+        if [ ! -f "Dockerfile" ]; then
+            echo "❌ 找不到Dockerfile，请确保在项目根目录运行此脚本"
+            echo ""
+            echo "💡 提示: 如果要使用远程镜像，运行:"
+            echo "   ./docker-start.sh"
+            echo ""
+            echo "   或明确指定:"
+            echo "   USE_REMOTE=true ./docker-start.sh"
+            exit 1
+        fi
+        docker build -t $IMAGE_NAME:latest .
+        echo "✅ 镜像构建完成"
+    else
+        echo "✅ 镜像已存在: $IMAGE_NAME"
+    fi
 fi
 
 # 构建docker run命令
@@ -66,7 +94,7 @@ DOCKER_CMD="$DOCKER_CMD -e MAX_BATCH_SIZE=20"
 DOCKER_CMD="$DOCKER_CMD -v ~/.cache/modelscope:/root/.cache/modelscope"
 
 # 镜像名
-DOCKER_CMD="$DOCKER_CMD $IMAGE_NAME:latest"
+DOCKER_CMD="$DOCKER_CMD $FINAL_IMAGE"
 
 echo ""
 echo "📋 启动命令："
