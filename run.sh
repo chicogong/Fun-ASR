@@ -4,6 +4,7 @@
 set -e
 
 MODE=${1:-local}
+USE_VENV=${2:-auto}
 
 echo "🚀 Fun-ASR MLT Batch Server"
 echo "============================="
@@ -23,8 +24,17 @@ case "$MODE" in
 
     echo "✅ Python: $($PYTHON_CMD --version)"
 
-    # Conda环境
-    if [ ! -z "$CONDA_DEFAULT_ENV" ]; then
+    # 强制使用venv
+    if [ "$USE_VENV" = "venv" ]; then
+      echo "🔧 强制使用venv模式"
+      if [ ! -d "venv" ]; then
+        echo "📦 创建虚拟环境..."
+        $PYTHON_CMD -m venv venv
+      fi
+      source venv/bin/activate
+      echo "✅ 虚拟环境: $VIRTUAL_ENV"
+    # Conda环境（自动模式）
+    elif [ ! -z "$CONDA_DEFAULT_ENV" ]; then
       echo "✅ Conda环境: $CONDA_DEFAULT_ENV"
 
       # 检查ffmpeg
@@ -115,11 +125,16 @@ case "$MODE" in
     ;;
 
   *)
-    echo "用法: $0 {local|docker|compose}"
+    echo "用法: $0 {local|docker|compose} [venv]"
     echo ""
-    echo "  local   - 本地运行（conda或venv）"
-    echo "  docker  - Docker运行"
-    echo "  compose - Docker Compose运行"
+    echo "  local        - 本地运行（自动检测conda或venv）"
+    echo "  local venv   - 本地运行（强制使用venv）"
+    echo "  docker       - Docker运行"
+    echo "  compose      - Docker Compose运行"
+    echo ""
+    echo "示例:"
+    echo "  $0 local        # 自动检测环境"
+    echo "  $0 local venv   # 强制使用venv（即使在conda中）"
     exit 1
     ;;
 esac
