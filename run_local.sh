@@ -3,13 +3,24 @@
 
 set -e
 
+# 检测Python版本
+PYTHON_CMD="python3"
+if command -v python3.8 &> /dev/null; then
+    PYTHON_CMD="python3.8"
+elif command -v python3.9 &> /dev/null; then
+    PYTHON_CMD="python3.9"
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD="python3.10"
+fi
+
 echo "🚀 Fun-ASR 本地服务"
 echo "===================="
+echo "Using: $($PYTHON_CMD --version)"
 
 # 1. 检查并创建虚拟环境
 if [ ! -d "venv" ]; then
     echo "📦 创建虚拟环境..."
-    python3 -m venv venv
+    $PYTHON_CMD -m venv venv
 fi
 
 # 2. 激活环境
@@ -22,7 +33,7 @@ pip install -q -r requirements.txt
 
 # 4. 检测设备
 echo "🔍 检测设备..."
-python3 -c "import torch; print('✅ CUDA' if torch.cuda.is_available() else '⚠️  CPU')"
+python -c "import torch; print('✅ CUDA' if torch.cuda.is_available() else '⚠️  CPU')"
 
 # 5. 启动服务
 echo "📡 启动服务..."

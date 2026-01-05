@@ -1,0 +1,48 @@
+{
+  // 隐藏文件和文件夹
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.pyo": true,
+    "**/*.egg-info": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true
+  },
+
+  // 搜索时排除
+  "search.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/venv": true,
+    "**/env": true,
+    "**/.venv": true,
+    "**/node_modules": true
+  },
+
+  // 文件监视排除
+  "files.watcherExclude": {
+    "**/__pycache__/**": true,
+    "**/venv/**": true,
+    "**/env/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true
+  },
+
+  // Python配置
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+
+  // 编辑器配置
+  "editor.formatOnSave": true,
+  "editor.rulers": [88, 120],
+
+  // Python格式化
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  }
+}

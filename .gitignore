@@ -11,11 +11,13 @@ env/
 ENV/
 
 # IDEs
-.vscode/
 .idea/
+.vscode/*.code-workspace
+.vscode/launch.json
 *.swp
 *.swo
 *~
+# 保留 .vscode/settings.json 供团队使用
 
 # Models and data
 *.pt
