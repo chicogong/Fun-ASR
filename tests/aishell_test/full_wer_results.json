@@ -1,0 +1,14 @@
+{
+  "dataset": "AISHELL-1 (Full Test Set)",
+  "model": "Fun-ASR-Nano",
+  "samples": 7176,
+  "cer_percent": 2.79,
+  "accuracy_percent": 97.21,
+  "substitutions": 2593,
+  "deletions": 223,
+  "insertions": 112,
+  "hits": 101949,
+  "total_ref_chars": 104765,
+  "processing_time_sec": 497.0,
+  "throughput_files_per_sec": 14.44
+}

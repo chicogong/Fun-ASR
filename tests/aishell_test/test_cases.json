@@ -1,0 +1,12 @@
+[
+  {
+    "audio": "/root/.cache/modelscope/hub/FunAudioLLM/Fun-ASR-Nano-2512/example/zh.mp3",
+    "reference": "欢迎大家来体验达摩院推出的语音识别模型",
+    "lang": "zh"
+  },
+  {
+    "audio": "/root/.cache/modelscope/hub/FunAudioLLM/Fun-ASR-Nano-2512/example/en.mp3",
+    "reference": "",
+    "lang": "en"
+  }
+]

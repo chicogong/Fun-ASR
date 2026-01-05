@@ -1,0 +1,20 @@
+# Fun-ASR Batch优化版 Docker镜像
+# 基于官方镜像，集成batch处理优化
+
+FROM ccr.ccs.tencentyun.com/chico/funasr-server:latest
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制batch优化文件
+COPY model_batch.py /app/model_batch.py
+COPY model_mlt_batch.py /app/model_mlt_batch.py
+
+# 创建优化版server.py
+COPY server_optimized.py /app/server.py
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动命令
+CMD ["python", "server.py"]
