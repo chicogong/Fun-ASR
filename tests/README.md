@@ -1,37 +1,73 @@
-# Fun-ASR 测试脚本
+# Fun-ASR MLT Batch Server 测试
 
-本目录包含性能测试和优化相关的脚本。
+## 📁 目录结构
 
-## 测试脚本
-
-| 脚本 | 说明 |
-|------|------|
-| `performance_test.py` | 基础性能测试（需要 ffmpeg） |
-| `quick_performance_test.py` | 快速性能测试（无外部依赖） |
-| `full_performance_test.py` | 完整批量测试（1-20） |
-| `test_remote_gpu.py` | 远程 GPU 服务器性能测试 |
-| `test_remote_rtf.py` | 远程服务器 RTF 对比测试 |
-| `optimize_l20.py` | L20 GPU 优化测试（批量1-50，并发测试） |
-
-## 使用方法
-
-```bash
-# 确保服务已启动
-curl http://localhost:8000/health
-
-# 运行快速测试
-python quick_performance_test.py
-
-# 运行完整测试
-python full_performance_test.py
-
-# 测试远程服务器
-python test_remote_gpu.py
-
-# L20 优化测试
-python optimize_l20.py
+```
+tests/
+├── download_multilingual_test_data.py  # 下载多语言测试数据
+├── test_multilingual_batch.py          # 测试多语言性能
+└── README.md                            # 本文件
 ```
 
-## 测试音频
+## 🚀 快速开始
 
-`aishell_test/` 目录包含测试音频样本。
+### 1. 下载测试数据
+
+```bash
+# 下载多语言测试样本（10种语言，每种5个样本）
+python tests/download_multilingual_test_data.py
+```
+
+这会下载以下语言的测试数据：
+- 中文、英语、日语、韩语
+- 法语、德语、西班牙语、俄语
+- 阿拉伯语、印地语
+
+### 2. 启动Batch Server
+
+```bash
+# 本地模式
+./start_batch_server.sh local
+
+# Docker模式
+./start_batch_server.sh docker
+```
+
+### 3. 运行多语言性能测试
+
+```bash
+# 测试所有语言的batch性能
+python tests/test_multilingual_batch.py
+```
+
+## 📊 性能指标
+
+测试会输出：
+- 每种语言的RTF (Real-Time Factor)
+- 处理速度
+- 识别结果示例
+- 每天处理能力估算
+
+## 💡 其他测试
+
+### HTTP API测试
+
+```bash
+# 测试健康检查
+curl http://localhost:8000/health
+
+# 批量转录
+curl -X POST http://localhost:8000/transcribe_batch \
+  -F "files=@test_data/multilingual/中文/zh_cn_0.wav" \
+  -F "files=@test_data/multilingual/英语/en_us_0.wav"
+
+# 查看统计
+curl http://localhost:8000/stats
+```
+
+## 📈 预期结果
+
+基于batch_size=6的测试：
+- RTF: ~0.03
+- 处理速度: ~30x 实时
+- 每天处理: ~700-800小时音频
