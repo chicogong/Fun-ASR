@@ -794,30 +794,31 @@ class FunASRNano(nn.Module):
         import os
         import yaml
 
-        # 下载模型（如果需要）
-        # 先用trust_remote_code=True下载，但不加载
         try:
-            # 检查模型是否已缓存
-            if not model.startswith("/"):
+            model_dir = None
+
+            # 如果是完整路径，直接使用
+            if model.startswith("/"):
+                model_dir = model
+            else:
                 # 尝试多个可能的缓存路径
                 possible_paths = [
                     os.path.expanduser(f"~/.cache/modelscope/models/{model}"),
                     f"/usr/local/app/.cache/modelscope/models/{model}",
                     f"/root/.cache/modelscope/models/{model}",
                 ]
-                model_dir = None
                 for path in possible_paths:
                     if os.path.exists(path):
                         model_dir = path
+                        print(f"✅ Found cached model: {model_dir}")
                         break
 
-                if model_dir is None:
-                    # 需要下载模型
-                    print(f"📥 Downloading model {model}...")
-                    from modelscope.hub.snapshot_download import snapshot_download
-                    model_dir = snapshot_download(model)
-            else:
-                model_dir = model
+            # 如果没找到缓存，下载模型
+            if model_dir is None or not os.path.exists(model_dir):
+                print(f"📥 Model not found in cache, downloading {model}...")
+                from modelscope.hub.snapshot_download import snapshot_download
+                model_dir = snapshot_download(model)
+                print(f"✅ Model downloaded to: {model_dir}")
 
             # 修改config.yaml中的model类名为FunASRNanoBatch
             config_path = os.path.join(model_dir, "config.yaml")
