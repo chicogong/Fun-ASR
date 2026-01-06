@@ -41,16 +41,11 @@ def load_model():
     logger.info(f"   Device: {DEVICE}")
     logger.info(f"   Optimal Batch Size: {OPTIMAL_BATCH_SIZE}")
 
-    # 使用缓存路径避免重复下载
-    if not MODEL_PATH.startswith("/"):
-        model_dir = os.path.expanduser(f"~/.cache/modelscope/models/{MODEL_PATH}")
-    else:
-        model_dir = MODEL_PATH
-
     from model_batch import FunASRNano
 
+    # 直接使用MODEL_PATH，让FunASRNano处理路径和配置
     model, model_kwargs = FunASRNano.from_pretrained(
-        model=model_dir,
+        model=MODEL_PATH,
         device=DEVICE,
         disable_update=True
     )

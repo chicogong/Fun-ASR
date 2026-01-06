@@ -791,11 +791,53 @@ class FunASRNano(nn.Module):
     @staticmethod
     def from_pretrained(model: str = None, **kwargs):
         from funasr import AutoModel
+        import os
+        import yaml
 
-        # Use FunASRNanoBatch registered class instead of remote code
-        kwargs['model_name'] = 'FunASRNanoBatch'
-        model, kwargs = AutoModel.build_model(
-            model=model, trust_remote_code=False, **kwargs
-        )
+        # 下载模型（如果需要）
+        # 先用trust_remote_code=True下载，但不加载
+        try:
+            # 检查模型是否已缓存
+            if not model.startswith("/"):
+                # 尝试多个可能的缓存路径
+                possible_paths = [
+                    os.path.expanduser(f"~/.cache/modelscope/models/{model}"),
+                    f"/usr/local/app/.cache/modelscope/models/{model}",
+                    f"/root/.cache/modelscope/models/{model}",
+                ]
+                model_dir = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        model_dir = path
+                        break
 
-        return model, kwargs
+                if model_dir is None:
+                    # 需要下载模型
+                    print(f"📥 Downloading model {model}...")
+                    from modelscope.hub.snapshot_download import snapshot_download
+                    model_dir = snapshot_download(model)
+            else:
+                model_dir = model
+
+            # 修改config.yaml中的model类名为FunASRNanoBatch
+            config_path = os.path.join(model_dir, "config.yaml")
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+
+                if config.get('model') != 'FunASRNanoBatch':
+                    print(f"🔧 Updating config.yaml: model -> FunASRNanoBatch")
+                    config['model'] = 'FunASRNanoBatch'
+                    with open(config_path, 'w') as f:
+                        yaml.dump(config, f, default_flow_style=False)
+
+            # 使用本地路径加载，不使用远程代码
+            model_instance, kwargs = AutoModel.build_model(
+                model=model_dir, trust_remote_code=False, **kwargs
+            )
+
+            return model_instance, kwargs
+
+        except Exception as e:
+            print(f"❌ Error loading model: {e}")
+            raise
