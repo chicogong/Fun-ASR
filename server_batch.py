@@ -9,6 +9,7 @@ import tempfile
 import logging
 from typing import List
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
@@ -27,8 +28,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Fun-ASR MLT Batch Server")
-
 # 全局模型实例
 model = None
 model_kwargs = None
@@ -36,29 +35,29 @@ model_kwargs = None
 def load_model():
     """加载支持batch的MLT模型"""
     global model, model_kwargs
-    
+
     logger.info(f"🔄 Loading MLT model with batch support...")
     logger.info(f"   Model: {MODEL_PATH}")
     logger.info(f"   Device: {DEVICE}")
     logger.info(f"   Optimal Batch Size: {OPTIMAL_BATCH_SIZE}")
-    
+
     # 使用缓存路径避免重复下载
     if not MODEL_PATH.startswith("/"):
         model_dir = os.path.expanduser(f"~/.cache/modelscope/models/{MODEL_PATH}")
     else:
         model_dir = MODEL_PATH
-    
+
     from model_batch import FunASRNano
-    
+
     model, model_kwargs = FunASRNano.from_pretrained(
         model=model_dir,
         device=DEVICE,
         disable_update=True
     )
     model.eval()
-    
+
     logger.info("✅ Model loaded successfully!")
-    
+
     # 预热
     logger.info("🔥 Warming up model...")
     dummy_file = "test_02.wav" if os.path.exists("test_02.wav") else None
@@ -69,10 +68,19 @@ def load_model():
         except Exception as e:
             logger.warning(f"Warmup failed: {e}")
 
-@app.on_event("startup")
-async def startup_event():
-    """启动时加载模型"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时加载模型
     load_model()
+    yield
+    # 关闭时的清理工作（如果需要）
+    logger.info("👋 Shutting down...")
+
+app = FastAPI(
+    title="Fun-ASR MLT Batch Server",
+    lifespan=lifespan
+)
 
 @app.get("/health")
 async def health_check():
