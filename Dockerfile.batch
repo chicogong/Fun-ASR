@@ -7,6 +7,14 @@ COPY model_batch.py ./
 COPY server_batch.py ./
 COPY requirements.txt ./
 
+# 安装额外依赖
+RUN pip install --upgrade pip -q && \
+    pip install -q fastapi uvicorn[standard] python-multipart && \
+    if [ -f requirements.txt ]; then pip install -q -r requirements.txt; fi
+
+# 安装测试依赖（可选）
+RUN pip install -q datasets soundfile
+
 # 修改缓存路径
 ENV MODEL_PATH="FunAudioLLM/Fun-ASR-MLT-Nano-2512" \
     DEVICE="cuda:0" \
@@ -15,6 +23,10 @@ ENV MODEL_PATH="FunAudioLLM/Fun-ASR-MLT-Nano-2512" \
 
 # 暴露端口
 EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # 启动服务
 CMD ["python", "server_batch.py", "--host", "0.0.0.0", "--port", "8000"]
