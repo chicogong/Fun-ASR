@@ -42,16 +42,42 @@ def load_model():
     logger.info(f"   Optimal Batch Size: {OPTIMAL_BATCH_SIZE}")
 
     from model_batch import FunASRNano
+    import torch
 
-    # 直接使用MODEL_PATH，让FunASRNano处理路径和配置
-    model, model_kwargs = FunASRNano.from_pretrained(
-        model=MODEL_PATH,
-        device=DEVICE,
-        disable_update=True
-    )
-    model.eval()
-
-    logger.info("✅ Model loaded successfully!")
+    # 尝试加载模型，如果CUDA失败则自动降级到CPU
+    try:
+        model, model_kwargs = FunASRNano.from_pretrained(
+            model=MODEL_PATH,
+            device=DEVICE,
+            disable_update=True
+        )
+        model.eval()
+        logger.info("✅ Model loaded successfully!")
+    except RuntimeError as e:
+        error_msg = str(e).lower()
+        if "cuda" in error_msg or "803" in str(e):
+            logger.error(f"❌ CUDA error: {e}")
+            logger.info("📊 CUDA Environment Info:")
+            logger.info(f"   PyTorch version: {torch.__version__}")
+            logger.info(f"   CUDA available: {torch.cuda.is_available()}")
+            if torch.cuda.is_available():
+                logger.info(f"   CUDA version (PyTorch): {torch.version.cuda}")
+                try:
+                    import subprocess
+                    nvcc_version = subprocess.check_output(["nvcc", "--version"], stderr=subprocess.STDOUT).decode()
+                    logger.info(f"   NVCC version: {nvcc_version.split('release')[-1].split(',')[0].strip()}")
+                except:
+                    pass
+            logger.warning("⚠️  Falling back to CPU mode...")
+            model, model_kwargs = FunASRNano.from_pretrained(
+                model=MODEL_PATH,
+                device="cpu",
+                disable_update=True
+            )
+            model.eval()
+            logger.info("✅ Model loaded successfully on CPU!")
+        else:
+            raise
 
     # 预热
     logger.info("🔥 Warming up model...")
