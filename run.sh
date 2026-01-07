@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fun-ASR 统一启动脚本（本地/Docker）
+# Fun-ASR MLT Batch Server 一键启动脚本
 
 set -e
 
@@ -8,12 +8,15 @@ USE_VENV=${2:-auto}
 
 echo "🚀 Fun-ASR MLT Batch Server"
 echo "============================="
+echo "📍 模式: $MODE"
+echo ""
 
 case "$MODE" in
   local)
-    echo "📍 模式: 本地运行"
+    echo "🔧 本地模式启动"
+    echo ""
 
-    # 检测Python（优先3.11以获得最佳兼容性）
+    # 检测Python
     PYTHON_CMD="python"
     for cmd in python3.11 python3.10 python3.9 python3.8 python3; do
       if command -v $cmd &> /dev/null; then
@@ -21,139 +24,107 @@ case "$MODE" in
         break
       fi
     done
-
     echo "✅ Python: $($PYTHON_CMD --version)"
 
-    # 强制使用venv或自动检测
-    if [ "$USE_VENV" = "venv" ] || [ -z "$CONDA_DEFAULT_ENV" ]; then
-      echo "🔧 使用venv模式"
-      # 优先使用venv311（Python 3.11）
+    # 检查是否在虚拟环境中
+    if [ -z "$VIRTUAL_ENV" ]; then
+      echo "🔧 检测虚拟环境..."
+
+      # 优先使用venv311
       if [ -d "venv311" ]; then
         source venv311/bin/activate
-        echo "✅ 虚拟环境: venv311 (Python 3.11)"
+        echo "✅ 激活: venv311"
       elif [ -d "venv" ]; then
         source venv/bin/activate
-        echo "✅ 虚拟环境: $VIRTUAL_ENV"
+        echo "✅ 激活: venv"
+      elif [ -d "env-3.8.8" ]; then
+        source env-3.8.8/bin/activate
+        echo "✅ 激活: env-3.8.8"
       else
-        echo "📦 创建虚拟环境..."
-        VENV_NAME="venv311"
-        if [[ "$PYTHON_CMD" == *"3.11"* ]]; then
-          VENV_NAME="venv311"
-        else
-          VENV_NAME="venv"
-        fi
-        $PYTHON_CMD -m venv $VENV_NAME
-        source $VENV_NAME/bin/activate
-        echo "📥 安装依赖..."
-        pip install --upgrade pip
-        pip install -r requirements.txt
-      fi
-    # Conda环境（自动模式）
-    elif [ ! -z "$CONDA_DEFAULT_ENV" ]; then
-      echo "✅ Conda环境: $CONDA_DEFAULT_ENV"
-
-      # 检查ffmpeg
-      if ! command -v ffmpeg &> /dev/null; then
-        echo "⚠️  ffmpeg未安装，尝试自动安装..."
-        if conda install -c conda-forge ffmpeg -y 2>/dev/null; then
-          echo "✅ ffmpeg安装成功"
-        else
-          echo "❌ ffmpeg自动安装失败（镜像源问题）"
-          echo "请手动安装："
-          echo "  conda install ffmpeg"
-          echo "  或使用pip: pip install ffmpeg-python"
-          echo "  或系统包管理: yum install ffmpeg-devel"
-          echo ""
-          echo "按Enter继续（ffmpeg为可选依赖）..."
-          read -t 5 || true
-        fi
-      else
-        echo "✅ ffmpeg已安装"
+        # 创建新的虚拟环境
+        echo "📦 创建虚拟环境: venv"
+        $PYTHON_CMD -m venv venv
+        source venv/bin/activate
+        echo "✅ 虚拟环境已创建"
       fi
     else
-      # venv环境
-      if [ ! -d "venv" ]; then
-        echo "📦 创建虚拟环境..."
-        $PYTHON_CMD -m venv venv
-      fi
-      source venv/bin/activate
-      echo "✅ 虚拟环境: $VIRTUAL_ENV"
+      echo "✅ 已在虚拟环境中: $VIRTUAL_ENV"
     fi
 
-    # 安装依赖
-    echo "📥 安装依赖..."
-    pip install -q --upgrade pip
-    pip install -q 'pydantic>=1.10.0,<2.0.0' 'fastapi>=0.95.0' 2>&1 | grep -v WARNING || true
-    pip install -q -r requirements.txt 2>&1 | grep -v WARNING || true
+    echo ""
+    echo "📦 安装/更新依赖..."
 
-    # 检测设备
-    echo "🔍 检测设备..."
-    python -c "import torch; print('✅ CUDA' if torch.cuda.is_available() else '⚠️  CPU')" 2>/dev/null || echo "⚠️  torch安装中..."
+    # 升级pip
+    python -m pip install --upgrade pip -q 2>&1 | grep -v WARNING || true
+
+    # 优先使用batch server的requirements
+    if [ -f "requirements-batch-server.txt" ]; then
+      echo "   安装 Batch Server 依赖..."
+      pip install -q -r requirements-batch-server.txt 2>&1 | grep -v WARNING || true
+    elif [ -f "requirements.txt" ]; then
+      echo "   安装 requirements.txt..."
+      pip install -q -r requirements.txt 2>&1 | grep -v WARNING || true
+    fi
+
+    # 确保FastAPI依赖已安装
+    echo "   确保 FastAPI 依赖..."
+    pip install -q fastapi uvicorn[standard] python-multipart 2>&1 | grep -v WARNING || true
+
+    # 确保测试依赖已安装
+    echo "   安装测试依赖..."
+    pip install -q datasets soundfile 2>&1 | grep -v WARNING || true
+
+    echo "   ✅ 依赖安装完成"
+    echo ""
+
+    # 验证关键依赖
+    echo "🔍 验证依赖..."
+    python -c "import fastapi; print('   ✅ FastAPI:', fastapi.__version__)" 2>&1 || echo "   ⚠️  FastAPI 未安装"
+    python -c "import uvicorn; print('   ✅ Uvicorn:', uvicorn.__version__)" 2>&1 || echo "   ⚠️  Uvicorn 未安装"
+    echo ""
+
+    echo "📡 启动Batch Server..."
+    echo "============================="
+    echo "✅ 服务地址: http://localhost:8000"
+    echo "📖 API文档: http://localhost:8000/docs"
+    echo "📊 性能统计: http://localhost:8000/stats"
+    echo ""
 
     # 启动服务
-    echo ""
-    echo "📡 启动服务..."
-    echo "============================="
-    uvicorn server:app --host 0.0.0.0 --port 8000
+    python server_batch.py
     ;;
-
+    
   docker)
-    echo "📍 模式: Docker运行"
-
+    echo "🐳 Docker模式启动"
+    
     if ! command -v docker &> /dev/null; then
       echo "❌ Docker未安装"
       exit 1
     fi
-
-    echo "🐳 构建Docker镜像..."
-    docker build -t funasr-mlt-batch:latest .
-
+    
+    echo "📦 构建镜像..."
+    docker build -t funasr-mlt-batch:latest -f Dockerfile.batch .
+    
     echo "🚀 启动容器..."
     docker run -d \
-      --name funasr \
+      --name funasr-batch \
       --gpus all \
       -p 8000:8000 \
       -v ~/.cache/modelscope:/root/.cache/modelscope \
       funasr-mlt-batch:latest
-
+    
     echo ""
-    echo "✅ 容器已启动: funasr"
-    echo "📊 查看日志: docker logs -f funasr"
-    echo "🛑 停止服务: docker stop funasr && docker rm funasr"
+    echo "✅ 容器已启动"
+    echo "📊 查看日志: docker logs -f funasr-batch"
+    echo "🛑 停止服务: docker stop funasr-batch && docker rm funasr-batch"
     ;;
-
-  compose)
-    echo "📍 模式: Docker Compose运行"
-
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-      echo "❌ Docker Compose未安装"
-      exit 1
-    fi
-
-    echo "🐳 启动服务..."
-    docker-compose up -d
-
-    echo ""
-    echo "✅ 服务已启动"
-    echo "📊 查看日志: docker-compose logs -f"
-    echo "🛑 停止服务: docker-compose down"
-    ;;
-
+    
   *)
-    echo "用法: $0 {local|docker|compose} [venv]"
-    echo ""
-    echo "  local        - 本地运行（自动检测conda或venv）"
-    echo "  local venv   - 本地运行（强制使用venv）"
-    echo "  docker       - Docker运行"
-    echo "  compose      - Docker Compose运行"
+    echo "用法: $0 {local|docker}"
     echo ""
     echo "示例:"
-    echo "  $0 local        # 自动检测环境"
-    echo "  $0 local venv   # 强制使用venv（即使在conda中）"
+    echo "  $0 local    # 本地运行"
+    echo "  $0 docker   # Docker运行"
     exit 1
     ;;
 esac
-
-echo ""
-echo "✅ 服务地址: http://localhost:8000"
-echo "📖 API文档: http://localhost:8000/docs"

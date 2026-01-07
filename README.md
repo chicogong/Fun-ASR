@@ -75,14 +75,18 @@ curl http://localhost:8000/health
 
 ## 性能
 
-- **RTF (Real-Time Factor)**：约0.44（batch_size=3）
-- **吞吐量提升**：相比单文件处理提升约14%
+- **RTF (Real-Time Factor)**：约0.021（batch_size=6）
+- **实时速度倍数**：47x 实时
+- **最优 batch_size**：6
+- **吞吐量**：约1186小时/天（单进程）
+- **加速比**：相比串行处理提升3.5x
 
 ## 文件结构
 
 ```
 Fun-ASR/
-├── server.py              # MLT batch服务器（使用AutoModel，无需自定义wrapper）
+├── server_batch.py        # 批量优化服务器
+├── model_batch.py         # 批量推理模型包装器
 ├── Dockerfile             # Docker镜像
 ├── docker-compose.yml     # Docker Compose配置
 ├── run.sh                 # 统一启动脚本

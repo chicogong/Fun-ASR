@@ -6,7 +6,7 @@
 
 ```bash
 # 方法1: 使用启动脚本（自动安装所有依赖）
-./start_batch_server.sh local
+./run.sh local
 ```
 
 脚本会自动：
@@ -75,10 +75,10 @@ python server_batch.py
 
 ```bash
 # 一键启动Docker
-./start_batch_server.sh docker
+./run.sh docker
 
 # 手动构建和运行
-docker build -t funasr-mlt-batch:latest -f Dockerfile.batch .
+docker build -t funasr-mlt-batch:latest .
 docker run -d --name funasr-batch --gpus all -p 8000:8000 funasr-mlt-batch:latest
 ```
 

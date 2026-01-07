@@ -26,7 +26,7 @@
 
 ```bash
 # 1. 一键启动
-./start_batch_server.sh local
+./run.sh local
 
 # 2. 测试服务
 curl http://localhost:8000/health
@@ -45,7 +45,7 @@ curl -X POST http://localhost:8000/transcribe_batch \
 
 ```bash
 # 1. 一键部署
-./start_batch_server.sh docker
+./run.sh docker
 
 # 2. 查看日志
 docker logs -f funasr-batch
@@ -123,8 +123,8 @@ GET /stats
 Fun-ASR/
 ├── server_batch.py              # Batch服务器
 ├── model_batch.py               # 批量推理模型
-├── start_batch_server.sh        # 一键启动脚本
-├── Dockerfile.batch             # Docker镜像
+├── run.sh        # 一键启动脚本
+├── Dockerfile             # Docker镜像
 ├── tests/                       # 测试目录
 │   ├── download_multilingual_test_data.py
 │   ├── test_multilingual_batch.py
