@@ -233,7 +233,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Fun-ASR MLT Batch Server")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind")
+    parser.add_argument("--port", type=int, default=8088, help="Port to bind")
     parser.add_argument("--workers", type=int, default=1, help="Number of workers")
     
     args = parser.parse_args()

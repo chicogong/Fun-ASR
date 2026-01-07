@@ -85,9 +85,9 @@ case "$MODE" in
 
     echo "📡 启动Batch Server..."
     echo "============================="
-    echo "✅ 服务地址: http://localhost:8000"
-    echo "📖 API文档: http://localhost:8000/docs"
-    echo "📊 性能统计: http://localhost:8000/stats"
+    echo "✅ 服务地址: http://localhost:8088"
+    echo "📖 API文档: http://localhost:8088/docs"
+    echo "📊 性能统计: http://localhost:8088/stats"
     echo ""
 
     # 启动服务
@@ -109,7 +109,7 @@ case "$MODE" in
     docker run -d \
       --name funasr-batch \
       --gpus all \
-      -p 8000:8000 \
+      -p 8088:8088 \
       -v ~/.cache/modelscope:/root/.cache/modelscope \
       funasr-mlt-batch:latest
     

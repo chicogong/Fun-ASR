@@ -13,13 +13,13 @@
 脚本会自动：
 - 创建 Python 虚拟环境
 - 安装依赖
-- 启动服务器（默认端口 8000）
+- 启动服务器（默认端口 8088）
 
 ### Docker 部署
 
 ```bash
 docker build -t funasr-batch .
-docker run -p 8000:8000 funasr-batch
+docker run -p 8088:8088 funasr-batch
 ```
 
 ## API 使用
@@ -27,7 +27,7 @@ docker run -p 8000:8000 funasr-batch
 ### 单文件转写
 
 ```bash
-curl -X POST http://localhost:8000/transcribe \
+curl -X POST http://localhost:8088/transcribe \
   -F "file=@audio.wav" \
   -F "language=zh"
 ```
@@ -35,7 +35,7 @@ curl -X POST http://localhost:8000/transcribe \
 ### 批量转写（推荐）
 
 ```bash
-curl -X POST http://localhost:8000/transcribe_batch \
+curl -X POST http://localhost:8088/transcribe_batch \
   -F "files=@audio1.wav" \
   -F "files=@audio2.wav" \
   -F "files=@audio3.wav"
@@ -44,7 +44,7 @@ curl -X POST http://localhost:8000/transcribe_batch \
 ### 健康检查
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8088/health
 ```
 
 ## 性能特点
