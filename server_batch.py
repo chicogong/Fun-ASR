@@ -9,7 +9,6 @@ import tempfile
 import logging
 from typing import List
 from pathlib import Path
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
@@ -89,19 +88,19 @@ def load_model():
         except Exception as e:
             logger.warning(f"Warmup failed: {e}")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    # 启动时加载模型
-    load_model()
-    yield
-    # 关闭时的清理工作（如果需要）
-    logger.info("👋 Shutting down...")
-
 app = FastAPI(
-    title="Fun-ASR MLT Batch Server",
-    lifespan=lifespan
+    title="Fun-ASR MLT Batch Server"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时加载模型"""
+    load_model()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时的清理工作"""
+    logger.info("👋 Shutting down...")
 
 @app.get("/health")
 async def health_check():
