@@ -20,7 +20,7 @@ from transformers import AutoConfig, AutoModelForCausalLM
 dtype_map = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}
 
 
-@tables.register("model_classes", "FunASRNano")
+@tables.register("model_classes", "FunASRNanoBatch")
 class FunASRNano(nn.Module):
     def __init__(
         self,
@@ -417,7 +417,7 @@ class FunASRNano(nn.Module):
             input_ids, dtype=torch.int64
         )
         attention_mask = torch.tensor([1] * len(input_ids), dtype=torch.int32)
-        labels = torch.tensor(labels, dtype=torch.int64)
+        labels = torch.tensor(labels, dtype=torch.int64)  
 
         fbank_mask = torch.tensor(fbank_mask, dtype=torch.float32)
         fbank_beg = torch.tensor(fbank_beg, dtype=torch.int32)
@@ -450,29 +450,395 @@ class FunASRNano(nn.Module):
 
         return output
 
+    def inference_prepare(
+        self,
+        data_in,
+        data_lengths=None,
+        key: list = None,
+        tokenizer=None,
+        frontend=None,
+        **kwargs,
+    ):
+        meta_data = {}
+
+        if kwargs.get("batch_size", 1) > 1:
+            logging.info(f"batch_size: {kwargs.get('batch_size')}")
+
+        outputs = []
+        full_contents = []
+        for i in range(kwargs.get("batch_size", 1)):
+            contents = self.data_template(data_in[i])
+            full_contents.append(contents)
+            output = self.data_load_speech(
+                contents, tokenizer, frontend, meta_data=meta_data, **kwargs
+            )
+            outputs.append(output)
+
+        # collate
+        speech_list = []
+        speech_lengths_list = []
+        input_ids_list = []
+        attention_mask_list = []
+        labels_ids_list = []
+        fbank_mask_list = []
+        fbank_beg_list = []
+        fake_token_len_list = []
+        source_ids_list = []
+        target_ids_list = []
+
+        for output in outputs:
+            # speech: (1, T, D) -> list of (T, D)
+            if output["speech_lengths"].numel() > 0:
+                for s in output["speech"]:
+                    if self.feat_permute:
+                        s = s.transpose(0, 1)
+                    speech_list.append(s)
+                for l in output["speech_lengths"]:
+                    speech_lengths_list.append(l)
+
+            input_ids_list.append(output["input_ids"][0])
+            attention_mask_list.append(output["attention_mask"][0])
+            labels_ids_list.append(output["labels_ids"])
+            fbank_mask_list.append(output["fbank_mask"][0])
+            fbank_beg_list.append(output["fbank_beg"][0])
+            fake_token_len_list.append(output["fake_token_len"][0])
+            source_ids_list.append(output["source_ids"][0])
+            target_ids_list.append(output["target_ids"][0])
+
+        # pad (Left Padding)
+        max_input_len = max([x.size(0) for x in input_ids_list])
+        padded_input_ids = []
+        padded_attention_mask = []
+        padded_source_ids = []
+        shifted_fbank_beg = []
+
+        for i in range(len(input_ids_list)):
+            curr_len = input_ids_list[i].size(0)
+            pad_len = max_input_len - curr_len
+            
+            # Left pad with 0
+            padded_input_ids.append(torch.cat([torch.zeros(pad_len, dtype=input_ids_list[i].dtype, device=input_ids_list[i].device), input_ids_list[i]]))
+            padded_attention_mask.append(torch.cat([torch.zeros(pad_len, dtype=attention_mask_list[i].dtype, device=attention_mask_list[i].device), attention_mask_list[i]]))
+            padded_source_ids.append(torch.cat([torch.zeros(pad_len, dtype=source_ids_list[i].dtype, device=source_ids_list[i].device), source_ids_list[i]]))
+            
+            # Shift fbank_beg indices by pad_len
+            shifted_fbank_beg.append(fbank_beg_list[i] + pad_len)
+
+        input_ids = torch.stack(padded_input_ids)
+        attention_mask = torch.stack(padded_attention_mask)
+        source_ids = torch.stack(padded_source_ids)
+        
+        # Pad fbank_beg and fake_token_len (Right padding is fine for these counts/indices lists, 0 is safe if we check valid items)
+        fbank_beg = torch.nn.utils.rnn.pad_sequence(shifted_fbank_beg, batch_first=True, padding_value=0)
+        fake_token_len = torch.nn.utils.rnn.pad_sequence(fake_token_len_list, batch_first=True, padding_value=0)
+        
+        # Audio padding (Right padding as before)
+        if len(speech_list) > 0:
+            speech = torch.nn.utils.rnn.pad_sequence(speech_list, batch_first=True, padding_value=0.0)
+            if self.feat_permute:
+                speech = speech.permute(0, 2, 1)
+            speech_lengths = torch.tensor([l.item() for l in speech_lengths_list], dtype=torch.int32)
+        else:
+            speech = torch.tensor([])
+            speech_lengths = torch.tensor([])
+
+        batch = {
+            "speech": speech,
+            "speech_lengths": speech_lengths,
+            "input_ids": input_ids,
+            "fbank_beg": fbank_beg,
+            "fake_token_len": fake_token_len,
+            "source_ids": source_ids,
+            "attention_mask": attention_mask
+        }
+        batch = to_device(batch, kwargs["device"])
+
+        # audio encoder
+        speech = batch["speech"]
+        speech_lengths= batch["speech_lengths"]
+        encoder_out = None
+        encoder_out_lens = None
+
+        if len(speech) > 0:
+            if "audio_embedding" in kwargs and "audio_embedding_lens" in kwargs:
+                encoder_out = kwargs["audio_embedding"]
+                encoder_out_lens = kwargs["audio_embedding_lens"]
+            else:
+                # fp16
+                if kwargs.get("fp16", False):
+                    speech = speech.to(torch.float16)
+                elif kwargs.get("bf16", False):
+                    speech = speech.to(torch.bfloat16)
+                # audio encoder
+                encoder_out, encoder_out_lens = self.encode(speech, speech_lengths)
+
+                # audio_adaptor
+                encoder_out, encoder_out_lens = self.audio_adaptor(
+                    encoder_out, encoder_out_lens
+                )
+                meta_data["audio_adaptor_out"] = encoder_out
+                meta_data["audio_adaptor_out_lens"] = encoder_out_lens
+
+        input_ids = batch["input_ids"]
+        source_ids = batch["source_ids"]
+        fbank_beg = batch["fbank_beg"]
+        fake_token_len = batch["fake_token_len"]
+
+        if not kwargs.get("tearchforing", False):
+            input_ids = source_ids
+
+        input_ids[input_ids < 0] = 0
+        inputs_embeds = self.llm.model.get_input_embeddings()(input_ids)
+
+        batch_size, token_num, dims = inputs_embeds.shape
+
+        fake_token_len[fake_token_len < 0] = 0
+        fbank_beg[fbank_beg < 0] = 0
+
+        speech_idx = 0
+        for batch_idx in range(batch_size):
+            for turn_id in range(fbank_beg.shape[1]):
+                fbank_beg_idx = fbank_beg[batch_idx, turn_id].item()
+                if fbank_beg_idx > 0:
+                    speech_token_len = fake_token_len[batch_idx, turn_id]
+                    # We need to make sure we don't go out of bounds if encoder_out is None
+                    if encoder_out is not None:
+                        speech_token = encoder_out[speech_idx, :speech_token_len, :]
+
+                        try:
+                            inputs_embeds[
+                                batch_idx,
+                                fbank_beg_idx : fbank_beg_idx + speech_token_len,
+                                :,
+                            ] = speech_token
+                        except Exception as e:
+                            logging.error(f"{str(e)}, {traceback.format_exc()}")
+                            speech_token_len = encoder_out_lens[speech_idx].item()
+                            speech_token = encoder_out[speech_idx, :speech_token_len, :]
+                            inputs_embeds[
+                                batch_idx,
+                                fbank_beg_idx : fbank_beg_idx + speech_token_len,
+                                :,
+                            ] = speech_token
+                        
+                        speech_idx += 1
+                        
+        return inputs_embeds, full_contents, batch, source_ids, meta_data
+
+    def inference(
+        self,
+        data_in,
+        data_lengths=None,
+        key: list = None,
+        tokenizer=None,
+        frontend=None,
+        **kwargs,
+    ):
+        hotwords = kwargs.get("hotwords", [])
+        if len(hotwords) > 0:
+            hotwords = ", ".join(hotwords)
+            prompt = f"请结合上下文信息，更加准确地完成语音转写任务。如果没有相关信息，我们会留空。\n\n\n**上下文信息：**\n\n\n"
+            prompt += f"热词列表：[{hotwords}]\n"
+        else:
+            prompt = ""
+        language = kwargs.get("language", "auto")
+        if language not in ("auto", "zh", "en", "ja"):
+            language = "auto"
+        if language == "auto":
+            prompt += "语音转写"
+        else:
+            LANGUAGE_MAP = {"zh": "中文", "en": "英文", "ja": "日文"}
+            prompt += f"语音转写成{LANGUAGE_MAP[language]}"
+        itn = kwargs.get("itn", True)
+        if not itn:
+            prompt += "，不进行文本规整"
+        prompt += "："
+
+        new_data_in = []
+        for data in data_in:
+            if isinstance(data, str):
+                new_data_in.append(
+                    [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {
+                            "role": "user",
+                            "content": f"{prompt}<|startofspeech|>!{data}<|endofspeech|>",
+                        },
+                        {"role": "assistant", "content": "null"},
+                    ]
+                )
+            elif isinstance(data, torch.Tensor):
+                new_data_in.append(
+                    [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {
+                            "role": "user",
+                            "content": f"{prompt}<|startofspeech|>!!<|endofspeech|>",
+                            "audio": data,
+                        },
+                        {"role": "assistant", "content": "null"},
+                    ]
+                )
+        data_in = new_data_in
+
+        if key is None:
+            key = []
+            for _ in data_in:
+                chars = string.ascii_letters + string.digits
+                key.append(
+                    "rand_key_" + "".join(random.choice(chars) for _ in range(13))
+                )
+
+        return self.inference_llm(
+            data_in,
+            data_lengths=data_lengths,
+            key=key,
+            tokenizer=tokenizer,
+            frontend=frontend,
+            **kwargs,
+        )
+
+    def inference_llm(
+        self,
+        data_in,
+        data_lengths=None,
+        key: list = None,
+        tokenizer=None,
+        frontend=None,
+        **kwargs,
+    ):
+        inputs_embeds, contents, batch, source_ids, meta_data = self.inference_prepare(
+            data_in, data_lengths, key, tokenizer, frontend, **kwargs
+        )
+        llm_dtype = kwargs.get("llm_dtype", "fp32")
+        if llm_dtype == "fp32":
+            llm_dtype = "fp16" if kwargs.get("fp16", False) else llm_dtype
+            llm_dtype = "bf16" if kwargs.get("bf16", False) else llm_dtype
+
+        with torch.cuda.amp.autocast(
+            enabled=True if llm_dtype != "fp32" else False, dtype=dtype_map[llm_dtype]
+        ):
+            labels = [c["assistant"][-1] for c in contents] # Get labels for all items in batch
+            self.llm = self.llm.to(dtype_map[llm_dtype])
+            inputs_embeds = inputs_embeds.to(dtype_map[llm_dtype])
+            llm_kwargs = kwargs.get("llm_kwargs", {})
+            if not kwargs.get("teachforing", False):
+                attention_mask = batch.get("attention_mask", None)
+                if attention_mask is not None:
+                     attention_mask = attention_mask.to(self.llm.device)
+                
+                generated_ids = self.llm.generate(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=attention_mask,
+                    max_new_tokens=kwargs.get("max_length", 512),
+                    **llm_kwargs,
+                )
+
+                response = tokenizer.batch_decode(
+                    generated_ids,
+                    skip_special_tokens=kwargs.get("skip_special_tokens", True),
+                )
+
+                loss = None
+            else:
+                labels_ids = batch["labels_ids"]
+                labels_ids[labels_ids == -1] = -100
+                attention_mask = batch.get("attention_mask", None)
+                model_outputs = self.llm(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=attention_mask,
+                    labels=labels_ids,
+                    **llm_kwargs,
+                )
+
+                preds = torch.argmax(model_outputs.logits, -1)[:, source_ids.shape[1] :]
+                response = tokenizer.batch_decode(
+                    preds,
+                    add_special_tokens=False,
+                    skip_special_tokens=kwargs.get("skip_special_tokens", True),
+                )
+                loss = model_outputs.loss.item() # This will be a single item if batch loss is averaged
+
+        ibest_writer = None
+        if kwargs.get("output_dir") is not None:
+            if not hasattr(self, "writer"):
+                self.writer = DatadirWriter(kwargs.get("output_dir"))
+            ibest_writer = self.writer[f"{0 + 1}best_recog"]
+
+        results = []
+        for i in range(len(response)):
+            response_clean = re.sub(r"[^\w\s\u3000\u4e00-\u9fff]+", "", response[i])
+            label_i = labels[i]
+            key_i = key[i]
+            
+            result_i = {
+                "key": key_i,
+                "text": re.sub(r'\s+', ' ', response[i].replace("/sil", " ")),
+                "text_tn": response_clean,
+                "label": label_i,
+            }
+            if loss is not None:
+                result_i["loss"] = loss
+            results.append(result_i)
+
+            if ibest_writer is not None:
+                ibest_writer["text"][key_i] = response[i].replace("\n", " ")
+                ibest_writer["label"][key_i] = label_i.replace("\n", " ")
+                ibest_writer["text_tn"][key_i] = response_clean
+
+        return results, meta_data
+
     @staticmethod
     def from_pretrained(model: str = None, **kwargs):
         from funasr import AutoModel
+        import os
+        import yaml
 
-        model, kwargs = AutoModel.build_model(
-            model=model, trust_remote_code=True, **kwargs
-        )
+        try:
+            model_dir = None
 
-        return model, kwargs
+            # 如果是完整路径，直接使用
+            if model.startswith("/"):
+                model_dir = model
+            else:
+                # 尝试多个可能的缓存路径
+                possible_paths = [
+                    os.path.expanduser(f"~/.cache/modelscope/models/{model}"),
+                    f"/usr/local/app/.cache/modelscope/models/{model}",
+                    f"/root/.cache/modelscope/models/{model}",
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        model_dir = path
+                        print(f"✅ Found cached model: {model_dir}")
+                        break
 
+            # 如果没找到缓存，下载模型
+            if model_dir is None or not os.path.exists(model_dir):
+                print(f"📥 Model not found in cache, downloading {model}...")
+                from modelscope.hub.snapshot_download import snapshot_download
+                model_dir = snapshot_download(model)
+                print(f"✅ Model downloaded to: {model_dir}")
 
-def main():
-    model_dir = "models/funasr-nano"
-    m, kwargs = FunASRNano.from_pretrained(model=model_dir, device="cuda:0",disable_update=True)
-    m.eval()
+            # 修改config.yaml中的model类名为FunASRNanoBatch
+            config_path = os.path.join(model_dir, "config.yaml")
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
 
-    import glob
-    wav_files = glob.glob("*.wav")
-    res = m.inference(data_in=wav_files, batch_size=len(wav_files), **kwargs)
-    for wav,text in zip(wav_files,res[0]):
-        text = text["text"]
-        print(f"{wav}\t{text}")
+                if config.get('model') != 'FunASRNanoBatch':
+                    print(f"🔧 Updating config.yaml: model -> FunASRNanoBatch")
+                    config['model'] = 'FunASRNanoBatch'
+                    with open(config_path, 'w') as f:
+                        yaml.dump(config, f, default_flow_style=False)
 
+            # 使用本地路径加载，不使用远程代码
+            model_instance, kwargs = AutoModel.build_model(
+                model=model_dir, trust_remote_code=False, **kwargs
+            )
 
-if __name__ == "__main__":
-    main()
+            return model_instance, kwargs
+
+        except Exception as e:
+            print(f"❌ Error loading model: {e}")
+            raise
